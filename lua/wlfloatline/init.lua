@@ -100,6 +100,7 @@ local function render_comp(comp, bufnr, winid, width, th_id)
                 table.insert(result, {
                     text = text:gsub('%%%%', '%%'),
                     hl = comp:make_hl(hl, hl_data.default),
+                    item = comp.name,
                 })
             end
         end
@@ -109,13 +110,14 @@ local function render_comp(comp, bufnr, winid, width, th_id)
         table.insert(result, {
             text = childs:gsub('%%%%', '%%'),
             hl = comp:make_hl(comp.hl, hl_data.default),
+            name = comp.name,
         })
     end
 
     return result
 end
 
-local function render_float_status(bufnr, winid, items)
+local function render_float_status(bufnr, winid, items, th_id)
     state.comp = {}
     state.mode = mode()
     Comp.reset()
@@ -123,14 +125,16 @@ local function render_float_status(bufnr, winid, items)
     local status = ''
     local cur_position = 0
     state.text_groups = {}
-    state.thread_id = state.thread_id + 1
     for _, comp in pairs(items) do
         if comp.width == nil or comp.width < total_width then
-            local hl = render_comp(comp, bufnr, winid, total_width, state.thread_id)
+            local hl = render_comp(comp, bufnr, winid, total_width, th_id)
             if hl then
                 for _, item in pairs(hl) do
                     table.insert(state.text_groups, item)
                 end
+            else
+                state.text_groups = {}
+                return false
             end
         end
     end
@@ -170,9 +174,10 @@ local function render_float_status(bufnr, winid, items)
     end
 
     state.floatline.status = status
+    return true
 end
 
-M.update_status = function()
+M.update_status = function(th_id)
     if state.floatline.is_hide then
         return
     end
@@ -206,16 +211,21 @@ M.update_status = function()
     end
 
     local line = windline.get_statusline(bufnr) or WindLine.default_line
-    render_float_status(bufnr, winid, line.active)
-    state.last_bufnr = bufnr
-    state.last_winid = winid
-    vim.api.nvim_buf_set_lines(
-        state.floatline.bufnr,
-        0,
-        1,
-        false,
-        { state.floatline.status }
-    )
+    state.text_groups = {}
+    if
+        state.thread_id == th_id
+        and render_float_status(bufnr, winid, line.active, th_id)
+    then
+        state.last_bufnr = bufnr
+        state.last_winid = winid
+        vim.api.nvim_buf_set_lines(
+            state.floatline.bufnr,
+            0,
+            1,
+            false,
+            { state.floatline.status }
+        )
+    end
 end
 
 M.floatline_show = function(bufnr, winid)
@@ -540,7 +550,10 @@ M.start_runner = function()
         delay = 200,
         type = 'blank',
         interval = state.config.interval,
-        tick = M.update_status,
+        tick = function()
+            state.thread_id = state.thread_id + 1
+            M.update_status(state.thread_id)
+        end,
         manage = false,
     })
     runner:run()
