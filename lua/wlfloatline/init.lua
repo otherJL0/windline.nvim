@@ -178,7 +178,7 @@ local function render_float_status(bufnr, winid, items, th_id)
 end
 
 M.update_status = function(th_id)
-    if state.floatline.is_hide then
+    if state.floatline.is_hide or not state.is_focus then
         return
     end
     if
@@ -246,6 +246,7 @@ M.floatline_show = function(bufnr, winid)
 end
 
 M.floatline_on_win_enter = function(bufnr, winid)
+    state.is_focus = true
     bufnr = bufnr or vim.api.nvim_get_current_buf()
     winid = winid or vim.api.nvim_get_current_win()
     if not vim.api.nvim_win_is_valid(winid) then
@@ -409,6 +410,7 @@ M.floatline_on_cmd_enter = function()
 end
 
 M.setup = function(opts)
+    state.is_focus = true
     opts = opts or {}
     opts = vim.tbl_deep_extend('force', default_config, opts)
     opts.statuslines = nil
@@ -432,6 +434,8 @@ M.setup = function(opts)
             au TabEnter * lua WindLine.floatline_on_tabenter()
             au CmdlineEnter * lua WindLine.floatline_on_cmd_enter()
             au CmdlineLeave * lua WindLine.floatline_on_cmd_leave()
+            au FocusGained * lua WindLine.state.is_focus=true
+            au FocusLost * lua WindLine.state.is_focus=false
             au VimResized * lua WindLine.floatline_on_resize()
             au VimEnter * lua WindLine.on_vimenter()
             au ColorScheme * lua WindLine.on_colorscheme()
